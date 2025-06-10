@@ -1,0 +1,308 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gerenciador de Chamados TI-Externo</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Custom height and width for the main container */
+    .main-container {
+      height: 90vh;
+      max-width: 1200px;
+      width: 90%;
+    }
+    /* Override Tailwind colors with green tones */
+    .bg-green-100 { background-color: #d1fae5; } /* Light emerald */
+    .bg-green-500 { background-color: #10b981; } /* Emerald */
+    .bg-green-600 { background-color: #059669; } /* Darker emerald */
+    .text-green-600 { color: #059669; } /* Darker emerald for text */
+    .bg-yellow-500 { background-color: #84cc16; } /* Lime for secondary buttons */
+    .bg-yellow-600 { background-color: #65a30d; } /* Darker lime */
+    .bg-red-500 { background-color: #16a34a; } /* Forest green for end buttons */
+    .bg-red-600 { background-color: #15803d; } /* Darker forest green */
+    .hover\:bg-green-600:hover { background-color: #059669; }
+    .hover\:bg-yellow-600:hover { background-color: #65a30d; }
+    .hover\:bg-red-600:hover { background-color: #15803d; }
+  </style>
+</head>
+<body class="bg-gray-100 flex flex-col items-center p-4">
+  <div class="main-container bg-white shadow-md rounded-lg p-6 overflow-auto">
+    <h1 class="text-2xl font-bold text-center text-green-600 mb-6">Gerenciador de Chamados TI-Externo</h1>
+
+    <!-- Formulário para adicionar chamado -->
+    <div class="mb-6">
+      <h2 class="text-lg font-semibold text-gray-700 mb-4">Adicionar Novo Chamado</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <input id="numeroChamado" type="text" placeholder="Número do Chamado" class="border rounded-lg p-2">
+        <input id="solicitante" type="text" placeholder="Solicitante" class="border rounded-lg p-2">
+        <select id="local" class="border rounded-lg p-2" onchange="toggleLaboratorioInput()">
+          <option value="" disabled selected>Selecione o Local</option>
+          <option value="Estabelecimento Barra Velha">Estabelecimento Barra Velha</option>
+          <option value="Estabelecimento Cordeiros">Estabelecimento Cordeiros</option>
+          <option value="Estabelecimento Navegantes">Estabelecimento Navegantes</option>
+          <option value="Estabelecimento Navegantes II">Estabelecimento Navegantes II</option>
+          <option value="Estabelecimento Itapema">Estabelecimento Itapema</option>
+          <option value="Hospital Unimed Litoral">Hospital Unimed Litoral</option>
+          <option value="Hospital Itajaí">Hospital Itajaí</option>
+          <option value="CDU Marcos Konder">CDU Marcos Konder</option>
+          <option value="Operadora - Sede">Operadora - Sede</option>
+          <option value="Bitmix">Bitmix</option>
+          <option value="Laboratório">Laboratório</option>
+          <option value="Espaço Viver Bem">Espaço Viver Bem</option>
+          <option value="Clube do Médico">Clube do Médico</option>
+          <option value="NAPB">NAPB</option>
+          <option value="Maternidade Unimed Litoral">Maternidade Unimed Litoral</option>
+          <option value="Estabelecimento 3ª Avenida">Estabelecimento 3ª Avenida</option>
+          <option value="Estabelecimento 4ª Avenida">Estabelecimento 4ª Avenida</option>
+          <option value="Núcleo Itaipava">Núcleo Itaipava</option>
+          <option value="Unimed RSUL">Unimed RSUL</option>
+        </select>
+        <input id="laboratorioNome" type="text" placeholder="Nome do Laboratório" class="border rounded-lg p-2 hidden" disabled>
+        <input id="dia" type="date" class="border rounded-lg p-2">
+        <input id="ordemServico" type="text" placeholder="Ordem de Serviço (opcional)" class="border rounded-lg p-2">
+        <textarea id="descricao" placeholder="Descrição do Chamado" class="border rounded-lg p-2 col-span-1 md:col-span-2"></textarea>
+        <textarea id="observacao" placeholder="Observação (opcional)" class="border rounded-lg p-2 col-span-1 md:col-span-2"></textarea>
+      </div>
+      <button onclick="adicionarChamado()" class="mt-4 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600">Adicionar Chamado</button>
+    </div>
+
+    <!-- Tabela de chamados -->
+    <div>
+      <h2 class="text-lg font-semibold text-gray-700 mb-4">Lista de Chamados</h2>
+      <table class="w-full border-collapse">
+        <thead>
+          <tr class="bg-green-100">
+            <th class="border p-2">Nº Chamado</th>
+            <th class="border p-2">Solicitante</th>
+            <th class="border p-2">Local</th>
+            <th class="border p-2">Descrição</th>
+            <th class="border p-2">Ordem de Serviço</th>
+            <th class="border p-2">Observação</th>
+            <th class="border p-2">Dia</th>
+            <th class="border p-2">Status</th>
+            <th class="border p-2">Tempo Rota</th>
+            <th class="border p-2">Tempo Demanda</th>
+            <th class="border p-2">Ações</th>
+          </tr>
+        </thead>
+        <tbody id="tabelaChamados"></tbody>
+      </table>
+      <button onclick="exportarDados()" class="mt-4 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600">Exportar Dados</button>
+    </div>
+  </div>
+
+  <script>
+    let chamados = JSON.parse(localStorage.getItem('chamados')) || [];
+
+    function toggleLaboratorioInput() {
+      const local = document.getElementById('local').value;
+      const laboratorioInput = document.getElementById('laboratorioNome');
+      const ordemServicoInput = document.getElementById('ordemServico');
+
+      if (local === 'Laboratório') {
+        laboratorioInput.classList.remove('hidden');
+        laboratorioInput.disabled = false;
+      } else {
+        laboratorioInput.classList.add('hidden');
+        laboratorioInput.disabled = true;
+        laboratorioInput.value = '';
+      }
+
+      if (local === 'Bitmix') {
+        ordemServicoInput.placeholder = 'Ordem de Serviço (obrigatório)';
+        ordemServicoInput.classList.add('border-red-500');
+      } else {
+        ordemServicoInput.placeholder = 'Ordem de Serviço (opcional)';
+        ordemServicoInput.classList.remove('border-red-500');
+      }
+    }
+
+    function adicionarChamado() {
+      const numeroChamado = document.getElementById('numeroChamado').value;
+      const solicitante = document.getElementById('solicitante').value;
+      const local = document.getElementById('local').value;
+      const laboratorioNome = document.getElementById('laboratorioNome').value;
+      const descricao = document.getElementById('descricao').value;
+      const ordemServico = document.getElementById('ordemServico').value;
+      const observacao = document.getElementById('observacao').value;
+      const dia = document.getElementById('dia').value;
+
+      // Validações
+      if (!numeroChamado || !solicitante || !local || !descricao || !dia) {
+        alert('Por favor, preencha todos os campos obrigatórios!');
+        return;
+      }
+
+      if (local === 'Laboratório' && !laboratorioNome) {
+        alert('Por favor, informe o nome do laboratório!');
+        return;
+      }
+
+      if (local === 'Bitmix' && !ordemServico) {
+        alert('A Ordem de Serviço é obrigatória para o local Bitmix!');
+        return;
+      }
+
+      const chamado = {
+        id: Date.now(),
+        numeroChamado,
+        solicitante,
+        local: local === 'Laboratório' ? `${local} - ${laboratorioNome}` : local,
+        descricao,
+        ordemServico,
+        observacao,
+        dia,
+        status: 'Pendente',
+        tempoInicioRota: null,
+        tempoFimRota: null,
+        tempoRota: null,
+        tempoInicioDemanda: null,
+        tempoFimDemanda: null,
+        tempoDemanda: null
+      };
+
+      chamados.push(chamado);
+      localStorage.setItem('chamados', JSON.stringify(chamados));
+      limparFormulario();
+      atualizarTabela();
+    }
+
+    function limparFormulario() {
+      document.getElementById('numeroChamado').value = '';
+      document.getElementById('solicitante').value = '';
+      document.getElementById('local').value = '';
+      document.getElementById('laboratorioNome').value = '';
+      document.getElementById('descricao').value = '';
+      document.getElementById('ordemServico').value = '';
+      document.getElementById('observacao').value = '';
+      document.getElementById('dia').value = '';
+      toggleLaboratorioInput();
+    }
+
+    function atualizarTabela() {
+      const tabela = document.getElementById('tabelaChamados');
+      tabela.innerHTML = '';
+      chamados.forEach(chamado => {
+        const tempoRota = calcularTempo(chamado.tempoInicioRota, chamado.tempoFimRota);
+        const tempoDemanda = calcularTempo(chamado.tempoInicioDemanda, chamado.tempoFimDemanda);
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td class="border p-2">${chamado.numeroChamado}</td>
+          <td class="border p-2">${chamado.solicitante}</td>
+          <td class="border p-2">${chamado.local}</td>
+          <td class="border p-2">${chamado.descricao}</td>
+          <td class="border p-2">${chamado.ordemServico || '-'}</td>
+          <td class="border p-2">${chamado.observacao || '-'}</td>
+          <td class="border p-2">${chamado.dia}</td>
+          <td class="border p-2">${chamado.status}</td>
+          <td class="border p-2">${tempoRota || '-'}</td>
+          <td class="border p-2">${tempoDemanda || '-'}</td>
+          <td class="border p-2">
+            ${chamado.status === 'Pendente' ? `<button onclick="iniciarRota(${chamado.id})" class="bg-green-500 text-white px-2 py-1 rounded hover:bg-green-600">Iniciar</button>` : ''}
+            ${chamado.status === 'Em Rota' ? `<button onclick="finalizarRota(${chamado.id})" class="bg-yellow-500 text-white px-2 py-1 rounded hover:bg-yellow-600">Finalizar Rota e Iniciar Demanda</button>` : ''}
+            ${chamado.status === 'Em Demanda' ? `<button onclick="encerrarDemanda(${chamado.id})" class="bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600">Encerrar</button>` : ''}
+          </td>
+        `;
+        tabela.appendChild(row);
+      });
+    }
+
+    function iniciarRota(id) {
+      const chamado = chamados.find(c => c.id === id);
+      if (chamado) {
+        chamado.status = 'Em Rota';
+        chamado.tempoInicioRota = new Date();
+        localStorage.setItem('chamados', JSON.stringify(chamados));
+        atualizarTabela();
+      }
+    }
+
+    function finalizarRota(id) {
+      const chamado = chamados.find(c => c.id === id);
+      if (chamado) {
+        chamado.tempoFimRota = new Date();
+        chamado.tempoRota = calcularTempo(chamado.tempoInicioRota, chamado.tempoFimRota);
+        chamado.status = 'Em Demanda';
+        chamado.tempoInicioDemanda = new Date();
+        localStorage.setItem('chamados', JSON.stringify(chamados));
+        atualizarTabela();
+      }
+    }
+
+    function encerrarDemanda(id) {
+      const chamado = chamados.find(c => c.id === id);
+      if (chamado) {
+        chamado.tempoFimDemanda = new Date();
+        chamado.tempoDemanda = calcularTempo(chamado.tempoInicioDemanda, chamado.tempoFimDemanda);
+        chamado.status = 'Concluído';
+        localStorage.setItem('chamados', JSON.stringify(chamados));
+        atualizarTabela();
+      }
+    }
+
+    function calcularTempo(inicio, fim) {
+      if (inicio && fim) {
+        const diffMs = new Date(fim) - new Date(inicio);
+        const horas = Math.floor(diffMs / 3600000);
+        const minutos = Math.floor((diffMs % 3600000) / 60000);
+        return `${horas}h ${minutos}m`;
+      }
+      return null;
+    }
+
+    function exportarDados() {
+      const dados = JSON.stringify(chamados, null, 2);
+      const blob = new Blob([dados], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'chamados.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // Carregar tabela ao iniciar
+    atualizarTabela();
+  </script>
+</body>
+</html>
